@@ -4,7 +4,7 @@ import UploadModal from './components/UploadModal.tsx';
 import { RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/rows.css";
 
-const pb = new PocketBase('http://localhost:8090');
+const pb = new PocketBase('/');
 
 interface Photo {
   id: string;
