@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: Smooth scrolling and base background */
+body {
+  background-color: #030712; /* Tailwind gray-950 */
+  color: white;
+}
