@@ -98,7 +98,7 @@ export default function App() {
       const photosToDownload = photos.filter(p => selectedPhotos.includes(p.id));
       
       for (const photo of photosToDownload) {
-        const url = pb.files.getUrl(photo, photo.image);
+        const url = pb.files.getURL(photo, photo.image);
         // Fetch as blob to force browser download rather than opening in new tab
         const response = await fetch(url);
         const blob = await response.blob();
@@ -123,7 +123,7 @@ export default function App() {
   };
 
   const formattedPhotos = photos.map((photo) => ({
-    src: pb.files.getUrl(photo, photo.image, { thumb: '0x800' }), 
+    src: pb.files.getURL(photo, photo.image, { thumb: '0x800' }), 
     width: photo.width || 1,   
     height: photo.height || 1,
     originalData: photo,       
@@ -290,7 +290,7 @@ export default function App() {
             </button>
 
             <img
-              src={pb.files.getUrl(lightboxPhoto, lightboxPhoto.image)}
+              src={pb.files.getURL(lightboxPhoto, lightboxPhoto.image)}
               alt="Full resolution"
               className={`max-h-[85vh] max-w-full object-contain shadow-2xl transition-transform duration-300 ease-out ${
                 isLightboxOpen ? 'scale-100' : 'scale-95'
