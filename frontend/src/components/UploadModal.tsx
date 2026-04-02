@@ -37,6 +37,19 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
       const file = files[i];
       let metadata = { camera: '', lens: '', aperture: '', shutter_speed: '', iso: '' };
 
+      const getDimensions = (): Promise<{ width: number; height: number }> => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            resolve({ width: img.width, height: img.height });
+            URL.revokeObjectURL(img.src); // Cleanup memory
+          };
+          img.src = URL.createObjectURL(file);
+        });
+      };
+
+      const dimensions = await getDimensions();
+
       try {
         // Extract EXIF for this specific file
         const tags = await ExifReader.load(file);
@@ -45,7 +58,7 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
           lens: tags['LensModel']?.description || '',
           aperture: tags['FNumber']?.description || '',
           shutter_speed: tags['ExposureTime']?.description || '',
-          iso: tags['ISOSpeedRatings']?.description?.toString() || '',
+          iso: tags['ISOSpeedRatings']?.description || '',
         };
       } catch (error) {
         console.warn(`Could not read EXIF for ${file.name}:`, error);
@@ -54,6 +67,8 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
       // Construct payload for this specific file
       const data = {
         image: file,
+        width: dimensions.width,
+        height: dimensions.height,
         ...metadata,
       };
 
@@ -75,17 +90,17 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
       <div className="bg-gray-900 w-full max-w-lg rounded-2xl p-6 border border-gray-800 shadow-2xl">
         <h2 className="text-xl font-bold mb-4 text-white">Upload Photos</h2>
-        
+
         <form onSubmit={handleUpload} className="space-y-4">
           {/* File Input Area - Now accepts multiple files */}
           <div className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-950 relative">
-            <input 
-              type="file" 
-              accept="image/jpeg, image/jpg" 
+            <input
+              type="file"
+              accept="image/jpeg, image/jpg"
               multiple
               onChange={handleFileChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-              id="file-upload" 
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              id="file-upload"
               disabled={isUploading}
             />
             <div className="pointer-events-none">
@@ -107,8 +122,8 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
                   <li key={idx} className="flex justify-between items-center text-sm text-gray-300 bg-gray-900 p-2 rounded">
                     <span className="truncate pr-4">{file.name}</span>
                     {!isUploading && (
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => removeFile(idx)}
                         className="text-red-400 hover:text-red-300 shrink-0"
                       >
@@ -124,8 +139,8 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
           {/* Upload Progress Indicator */}
           {isUploading && uploadProgress && (
             <div className="w-full bg-gray-800 rounded-full h-2.5 mt-4 overflow-hidden">
-              <div 
-                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out" 
+              <div
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out"
                 style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
               ></div>
               <p className="text-xs text-center text-gray-400 mt-2">
@@ -136,15 +151,15 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onClose}
               disabled={isUploading}
               className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               disabled={files.length === 0 || isUploading}
               className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 px-6 py-2 rounded-lg text-sm font-medium transition-colors"
