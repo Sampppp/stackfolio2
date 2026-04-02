@@ -2,8 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: Smooth scrolling and base background */
+@layer base {
+  :root {
+    /* Main App Background (Pure White) */
+    --background: #ffffff;
+    
+    /* Main Text Color (Dark Slate for readability) */
+    --foreground: #0f172a; 
+    
+    /* Cards, Modals, and Image Backgrounds (Off-white) */
+    --surface: #f8fafc; 
+    
+    /* Subtle borders */
+    --border: #e2e8f0; 
+    
+    /* Muted text for metadata */
+    --muted: #64748b;
+    
+    /* Action buttons (Blue) */
+    --primary: #4673b0;
+    --primary-hover: #304d75;
+  }
+}
+
 body {
-  background-color: #030712; /* Tailwind gray-950 */
-  color: white;
+  background-color: var(--background);
+  color: var(--foreground);
 }

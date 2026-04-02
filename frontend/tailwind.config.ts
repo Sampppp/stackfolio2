@@ -6,7 +6,17 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        surface: 'var(--surface)',
+        border: 'var(--border)',
+        muted: 'var(--muted)',
+        primary: 'var(--primary)',
+        'primary-hover': 'var(--primary-hover)',
+      }
+    },
   },
   plugins: [],
 } satisfies Config
