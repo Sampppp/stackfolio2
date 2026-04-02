@@ -1,7 +1,23 @@
-FROM node:20-alpine
+# ---- Build Stage ----
+FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Install dependencies (using ci for reproducible installs)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
+
+# Copy source files and build the production assets
 COPY . .
-EXPOSE 5173
-CMD ["npm", "run", "dev"]
+RUN npm run build
+
+# ---- Production Stage ----
+FROM nginx:alpine
+
+# Copy the built static files into Nginx's html directory
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Expose the default HTTP port
+EXPOSE 80
+
+# Run Nginx in the foreground
+CMD ["nginx", "-g", "daemon off;"]
