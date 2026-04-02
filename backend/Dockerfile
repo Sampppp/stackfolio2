@@ -1,6 +1,7 @@
 FROM alpine:latest
 
-ARG PB_VERSION=0.22.8
+# Upgrade to 0.23.0 to support the _superusers collection
+ARG PB_VERSION=0.23.0
 
 RUN apk add --no-cache unzip ca-certificates
 
@@ -11,7 +12,7 @@ RUN unzip /tmp/pb.zip -d /pb/
 # Create pb_data directory
 RUN mkdir -p /pb/pb_data
 
-# ---> NEW: Copy the migrations directory into the container <---
+# Copy the migrations directory into the container
 COPY ./pb_migrations /pb/pb_migrations
 
 EXPOSE 8090
