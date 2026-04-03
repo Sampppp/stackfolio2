@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PocketBase from 'pocketbase';
 import ExifReader from 'exifreader';
 
-const pb = new PocketBase('http://localhost:8090');
+const pb = new PocketBase('/');
 
 interface UploadModalProps {
   onClose: () => void;
