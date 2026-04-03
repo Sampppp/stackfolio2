@@ -84,7 +84,8 @@ export default function App() {
     setIsLoading(true);
     try {
       const records = await pb.collection('photos').getFullList<Photo>({
-        sort: '-created',
+        // Sort photos by creation date in ascending order (oldest first)
+        sort: 'created',
       });
       setPhotos(records);
     } catch (error) {

@@ -46,18 +46,18 @@ migrate((app) => {
     });
 
     app.save(collection);
-    console.log("🚀 [migration] 'photos' collection created with v0.23 fields.");
+    console.log("[migration] 'photos' collection created with v0.23 fields.");
 
     try {
         const superusers = app.findCollectionByNameOrId("_superusers");
         const record = new Record(superusers);
-        record.set("email", "temp.email@gmail.com");
-        record.set("password", "temp.password");
+        record.set("email", "a@gmail.com");
+        record.set("password", "1234567890");
         
         app.save(record);
-        console.log("🔐 [migration] Default superuser account created.");
+        console.log("[migration] Default superuser account created.");
     } catch (err) {
-        console.error("❌ [migration] Failed to create default superuser:", err);
+        console.error("[migration] Failed to create default superuser:", err);
     }
 
 }, (app) => {
