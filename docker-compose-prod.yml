@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/pb/pb_data
+      - /mnt/nas/images:/pb/pb_data/storage # Maps the storage folder to your local root
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile-prod
+    # Expose the Nginx HTTP port (80) to the host. Adjust if you prefer a different external port.
+    ports:
+      - "3000:80"
+    # No volume mounts are needed for the production image; the built assets are baked into the image.
+    # If you need to bind mount for development, use a separate compose file.
+    environment:
+      - VITE_POCKETBASE_URL=/
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+volumes:
+  pb_data:
+
+networks:
+  app-network:
+    driver: bridge

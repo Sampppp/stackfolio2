@@ -93,6 +93,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      # For development we use the Dockerfile-dev which runs the Vite dev server.
+      # For production we use the default Dockerfile (Dockerfile-prod) which builds the app and serves
+      # the static files with Nginx. The production Dockerfile automatically copies the custom
+      # `nginx.conf` into the container, so no manual Nginx configuration is required.
+      # The appropriate Dockerfile is selected in the respective docker‑compose files.
     ports:
       - "5173:5173"
     volumes:
