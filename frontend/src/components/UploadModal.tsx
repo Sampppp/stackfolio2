@@ -1,8 +1,9 @@
+/// <reference types="vite/client" />
 import React, { useState } from 'react';
 import PocketBase from 'pocketbase';
 import ExifReader from 'exifreader';
 
-const pb = new PocketBase('/');
+const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL);
 
 interface UploadModalProps {
   onClose: () => void;

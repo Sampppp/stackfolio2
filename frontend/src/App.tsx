@@ -1,10 +1,11 @@
+/// <reference types="vite/client" />
 import React, { useState, useEffect, useCallback } from 'react';
 import PocketBase from 'pocketbase';
 import UploadModal from './components/UploadModal.tsx';
 import { RowsPhotoAlbum } from "react-photo-album";
 import "react-photo-album/rows.css";
 
-const pb = new PocketBase('/');
+const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL);
 
 interface Photo {
   id: string;
