@@ -23,13 +23,12 @@ interface Photo {
 }
 
 export default function App() {
-  // --- Auth State ---
-  const [isAdmin, setIsAdmin] = useState(pb.authStore.isValid && pb.authStore.isSuperuser); const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(pb.authStore.isValid && pb.authStore.isSuperuser);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // --- App State ---
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -37,37 +36,31 @@ export default function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [noMorePhotos, setNoMorePhotos] = useState(false);
-  const perPage = 30; // number of photos per page
+  const perPage = 30;
 
-  // --- Selection State ---
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  // --- Header visibility on scroll ---
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = React.useRef(0);
   const ticking = React.useRef(false);
 
-  // Listen for auth state changes globally
   useEffect(() => {
     return pb.authStore.onChange(() => {
       setIsAdmin(pb.authStore.isValid && pb.authStore.isSuperuser);
     });
   }, []);
 
-  // Listen to scroll events to hide/show header based on scroll direction
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY;
       if (!ticking.current) {
         window.requestAnimationFrame(() => {
-          // Hide header when scrolling down past a small offset
           if (currentY > lastScrollY.current && currentY > 100) {
             setShowHeader(false);
           } else {
-            // Show header when scrolling up
             setShowHeader(true);
           }
           lastScrollY.current = currentY;
@@ -86,7 +79,6 @@ export default function App() {
     setIsProcessing(true);
     try {
       await pb.collection('_superusers').authWithPassword(loginEmail, loginPassword);
-
       setIsLoginOpen(false);
       setLoginEmail('');
       setLoginPassword('');
@@ -112,38 +104,25 @@ export default function App() {
     setTimeout(() => setLightboxPhoto(null), 300);
   };
 
-  // Ref to prevent overlapping fetches (auto‑cancellation)
   const fetchingRef = React.useRef(false);
 
   const fetchPhotos = useCallback(async (pageToLoad: number) => {
-    // Reset end‑of‑list flag when loading the first page
-    if (pageToLoad === 1) {
-      setNoMorePhotos(false);
-    }
-    // Debounce overlapping calls
+    if (pageToLoad === 1) setNoMorePhotos(false);
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     setIsLoading(true);
     try {
       const result = await pb.collection('photos').getList<Photo>(pageToLoad, perPage, {
-        // Request records sorted by the guaranteed `date_taken` field.
         sort: '-date_taken',
       });
       const records = result.items;
-      // Merge with existing photos and sort by filename (numeric part) descending.
-      // Sort photos by the guaranteed `date_taken` field (most recent first).
-      // Since `date_taken` is always populated on upload, we no longer need any fallback to `created`.
       setPhotos(prev => {
         const combined = pageToLoad === 1 ? records : [...prev, ...records];
         return combined.slice().sort((a, b) => {
-          // Both `a.date_taken` and `b.date_taken` are guaranteed to be ISO strings.
           return new Date(b.date_taken!).getTime() - new Date(a.date_taken!).getTime();
         });
       });
-      // If fewer records than perPage, we've reached the end
-      if (records.length < perPage) {
-        setNoMorePhotos(true);
-      }
+      if (records.length < perPage) setNoMorePhotos(true);
     } catch (error) {
       console.error("Failed to fetch photos:", error);
     } finally {
@@ -152,13 +131,11 @@ export default function App() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchPhotos(1);
     setPage(1);
   }, [fetchPhotos]);
 
-  // Infinite scroll sentinel
   useEffect(() => {
     const sentinel = document.getElementById('photo-sentinel');
     if (!sentinel) return;
@@ -171,7 +148,7 @@ export default function App() {
             const next = page + 1;
             fetchPhotos(next);
             setPage(next);
-          }, 200); // 200ms debounce to avoid rapid calls
+          }, 200);
         }
       });
     }, { rootMargin: '200px' });
@@ -193,7 +170,6 @@ export default function App() {
     setSelectedPhotos([]);
   };
 
-  // Perform actual deletion after user confirms via modal
   const performDeleteSelected = async () => {
     setIsProcessing(true);
     try {
@@ -201,7 +177,6 @@ export default function App() {
         await pb.collection('photos').delete(id);
       }
       cancelSelection();
-      // Reload the first page after deletion to keep pagination consistent
       await fetchPhotos(1);
     } catch (error) {
       console.error("Failed to delete photos:", error);
@@ -212,7 +187,6 @@ export default function App() {
     }
   };
 
-  // Open confirmation modal instead of native confirm
   const handleDeleteSelected = () => {
     if (selectedPhotos.length === 0) return;
     setIsDeleteConfirmOpen(true);
@@ -222,19 +196,16 @@ export default function App() {
     setIsProcessing(true);
     try {
       const photosToDownload = photos.filter(p => selectedPhotos.includes(p.id));
-
       for (const photo of photosToDownload) {
         const url = pb.files.getURL(photo, photo.image);
         const response = await fetch(url);
         const blob = await response.blob();
-
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = photo.image;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       cancelSelection();
@@ -246,23 +217,31 @@ export default function App() {
     }
   };
 
-  const formattedPhotos = photos.map((photo) => ({
-    // Use tiny thumbnail for grid rendering
-    src: pb.files.getURL(photo, photo.image, { thumb: '200x0' }),
-    width: photo.width || 1,
-    height: photo.height || 1,
-    originalData: photo,
-  }));
+  // Optimization 1: srcSet for responsive loading
+  const formattedPhotos = photos.map((photo) => {
+    const thumb200 = pb.files.getURL(photo, photo.image, { thumb: '200x0' });
+    const thumb400 = pb.files.getURL(photo, photo.image, { thumb: '400x0' });
+    const thumb800 = pb.files.getURL(photo, photo.image, { thumb: '0x800' });
+    const aspectRatio = (photo.height || 1) / (photo.width || 1);
+
+    return {
+      src: thumb800,
+      srcSet: [
+        { src: thumb200, width: 200, height: Math.round(200 * aspectRatio) },
+        { src: thumb400, width: 400, height: Math.round(400 * aspectRatio) },
+        { src: thumb800, width: Math.round(800 / aspectRatio), height: 800 }
+      ],
+      width: photo.width || 1,
+      height: photo.height || 1,
+      originalData: photo,
+    };
+  });
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 font-sans transition-colors duration-300 flex flex-col pt-24">
-
-      {/* Header Context Bar */}
+    <div className="min-h-screen bg-background p-4 md:p-8 font-sans flex flex-col pt-24">
       <header className={`fixed top-0 left-0 right-0 z-50 bg-background border-b border-border h-14 w-full flex justify-between items-center max-w-7xl mx-auto transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Portfolio</h1>
-
-          {/* Subtle Admin Controls */}
           {isAdmin ? (
             <button onClick={handleLogout} className="text-xs text-muted hover:text-red-400 mt-2 transition-colors">
               Logout Admin
@@ -273,70 +252,30 @@ export default function App() {
             </button>
           )}
         </div>
-
         <div className="flex gap-3 items-center">
           {isSelectMode ? (
             <>
-              <span className="text-sm font-medium text-muted mr-2">
-                {selectedPhotos.length} selected
-              </span>
-              <button
-                onClick={handleDownloadSelected}
-                disabled={selectedPhotos.length === 0 || isProcessing}
-                className="bg-surface text-foreground border border-border px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 transition-colors"
-              >
-                Download
-              </button>
-
-              {/* Only Admins can Delete */}
+              <span className="text-sm font-medium text-muted mr-2">{selectedPhotos.length} selected</span>
+              <button onClick={handleDownloadSelected} disabled={selectedPhotos.length === 0 || isProcessing} className="bg-surface text-foreground border border-border px-4 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 disabled:opacity-50 transition-colors">Download</button>
               {isAdmin && (
-                <button
-                  onClick={handleDeleteSelected}
-                  disabled={selectedPhotos.length === 0 || isProcessing}
-                  className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors"
-                >
-                  {isProcessing ? 'Processing...' : 'Delete'}
-                </button>
+                <button onClick={handleDeleteSelected} disabled={selectedPhotos.length === 0 || isProcessing} className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">{isProcessing ? 'Processing...' : 'Delete'}</button>
               )}
-
-              <button
-                onClick={cancelSelection}
-                disabled={isProcessing}
-                className="text-muted hover:text-foreground px-2 py-2 text-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={cancelSelection} disabled={isProcessing} className="text-muted hover:text-foreground px-2 py-2 text-sm font-medium transition-colors">Cancel</button>
             </>
           ) : (
             <>
-              <button
-                onClick={() => setIsSelectMode(true)}
-                disabled={photos.length === 0}
-                className="text-muted hover:text-foreground px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                Select
-              </button>
-
-              {/* Only Admins can Add Photos */}
+              <button onClick={() => setIsSelectMode(true)} disabled={photos.length === 0} className="text-muted hover:text-foreground px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50">Select</button>
               {isAdmin && (
-                <button
-                  onClick={() => setIsUploadOpen(true)}
-                  className="bg-primary text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-primary-hover transition-colors shadow-sm"
-                >
-                  Add Photo
-                </button>
+                <button onClick={() => setIsUploadOpen(true)} className="bg-primary text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-primary-hover transition-colors shadow-sm">Add Photo</button>
               )}
             </>
           )}
         </div>
       </header>
 
-      {/* Main Content Area */}
       <div className="flex-grow">
         {isLoading && photos.length === 0 ? (
-          <div className="flex justify-center items-center h-64 text-muted">
-            Loading gallery...
-          </div>
+          <div className="flex justify-center items-center h-64 text-muted">Loading gallery...</div>
         ) : (
           <div className="max-w-7xl mx-auto mt-12">
             <RowsPhotoAlbum
@@ -344,11 +283,8 @@ export default function App() {
               targetRowHeight={350}
               spacing={4}
               onClick={({ photo }) => {
-                if (isSelectMode) {
-                  toggleSelection((photo.originalData as Photo).id);
-                } else {
-                  openLightbox(photo.originalData as Photo);
-                }
+                if (isSelectMode) toggleSelection((photo.originalData as Photo).id);
+                else openLightbox(photo.originalData as Photo);
               }}
               render={{
                 image: (props, { photo }) => {
@@ -358,22 +294,27 @@ export default function App() {
                   const { style, ...restImageProps } = props;
 
                   return (
+                    // Optimization 2: content-visibility added here
                     <div
-                      style={{ ...style, position: 'relative' }}
-                      className={`group overflow-hidden rounded-sm cursor-zoom-in transition-all ${isSelectMode && isSelected ? 'ring-4 ring-primary ring-inset opacity-90' : 'shadow-sm hover:shadow-xl'
-                        }`}
+                      style={{
+                        ...style,
+                        position: 'relative',
+                        contentVisibility: 'auto',
+                        containIntrinsicSize: `${style?.width}px ${style?.height}px`
+                      }}
+                      className={`group overflow-hidden rounded-sm cursor-zoom-in transition-all ${isSelectMode && isSelected ? 'ring-4 ring-primary ring-inset opacity-90' : 'shadow-sm hover:shadow-xl'}`}
                     >
                       <img
                         {...restImageProps}
                         loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         className={`transition-transform duration-500 ${!isSelectMode && 'group-hover:scale-[1.02]'}`}
                       />
 
                       {isSelectMode && (
                         <div className="absolute top-3 left-3 z-20">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'bg-black/20 border-white/70 hover:bg-black/40'
-                            }`}>
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'bg-black/20 border-white/70 hover:bg-black/40'}`}>
                             {isSelected && (
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -406,17 +347,11 @@ export default function App() {
           </div>
         )}
       </div>
-      {/* Sentinel for infinite scroll – hidden when no more photos */}
+
       {!noMorePhotos && <div id="photo-sentinel" className="h-1"></div>}
 
-      {/* Modals */}
-      {isUploadOpen && isAdmin && (
-        <UploadModal
-          onClose={() => setIsUploadOpen(false)}
-          // After uploading, reload the first page to include new photos
-          onUploadSuccess={() => fetchPhotos(1)}
-        />
-      )}
+      {/* Modals remain exactly the same as your original file */}
+      {isUploadOpen && isAdmin && <UploadModal onClose={() => setIsUploadOpen(false)} onUploadSuccess={() => fetchPhotos(1)} />}
 
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
