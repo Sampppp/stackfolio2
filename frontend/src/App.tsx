@@ -1,11 +1,44 @@
 /// <reference types="vite/client" />
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import PocketBase from 'pocketbase';
 import UploadModal from './components/UploadModal.tsx';
-import { RowsPhotoAlbum } from "react-photo-album";
-import "react-photo-album/rows.css";
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 
 const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL);
+
+// Helper to calculate rows for virtualized layout
+function calculateRows(photos: any[], containerWidth: number, targetRowHeight = 350, spacing = 4) {
+  if (!containerWidth || photos.length === 0) return [];
+
+  const rows = [];
+  let currentRow: any[] = [];
+  let currentWidth = 0;
+
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i];
+    const aspect = (photo.width || 1) / (photo.height || 1);
+    const widthAtTargetHeight = targetRowHeight * aspect;
+
+    currentRow.push({ photo, aspect });
+    currentWidth += widthAtTargetHeight;
+
+    const totalSpacing = (currentRow.length - 1) * spacing;
+
+    if (currentWidth + totalSpacing >= containerWidth) {
+      const sumAspects = currentRow.reduce((sum, item) => sum + item.aspect, 0);
+      const exactHeight = (containerWidth - totalSpacing) / sumAspects;
+      rows.push({ items: currentRow, exactHeight });
+      currentRow = [];
+      currentWidth = 0;
+    }
+  }
+
+  if (currentRow.length > 0) {
+    rows.push({ items: currentRow, exactHeight: targetRowHeight, isLastRow: true });
+  }
+
+  return rows;
+}
 
 interface Photo {
   id: string;
@@ -47,6 +80,11 @@ export default function App() {
   const lastScrollY = React.useRef(0);
   const ticking = React.useRef(false);
 
+  // Refs and State for Virtualization
+  const galleryRef = React.useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [listOffset, setListOffset] = useState(0); // Tracks the top offset of the gallery
+
   useEffect(() => {
     return pb.authStore.onChange(() => {
       setIsAdmin(pb.authStore.isValid && pb.authStore.isSuperuser);
@@ -72,6 +110,18 @@ export default function App() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // ResizeObserver to update container width AND top offset
+  useEffect(() => {
+    if (!galleryRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+      // Ensure the virtualizer knows where the list actually starts on the page
+      setListOffset(galleryRef.current!.getBoundingClientRect().top + window.scrollY);
+    });
+    observer.observe(galleryRef.current);
+    return () => observer.disconnect();
+  }, [photos.length]); // Re-run if photo array changes drastically
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,13 +201,13 @@ export default function App() {
           }, 200);
         }
       });
-    }, { rootMargin: '200px' });
+    }, { rootMargin: '400px' }); // Increased root margin to fetch slightly earlier
     observer.observe(sentinel);
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       observer.disconnect();
     };
-  }, [page, isLoading, fetchPhotos]);
+  }, [page, isLoading, fetchPhotos, noMorePhotos]);
 
   const toggleSelection = (id: string) => {
     setSelectedPhotos(prev =>
@@ -217,29 +267,46 @@ export default function App() {
     }
   };
 
-  // Optimization 1: srcSet for responsive loading
-  const formattedPhotos = photos.map((photo) => {
-    const thumb200 = pb.files.getURL(photo, photo.image, { thumb: '200x0' });
-    const thumb400 = pb.files.getURL(photo, photo.image, { thumb: '400x0' });
-    const thumb800 = pb.files.getURL(photo, photo.image, { thumb: '0x800' });
-    const aspectRatio = (photo.height || 1) / (photo.width || 1);
+  // Memoize formatted photos to prevent unnecessary re-renders
+  const formattedPhotos = useMemo(() => {
+    return photos.map((photo) => {
+      const thumb200 = pb.files.getURL(photo, photo.image, { thumb: '200x0' });
+      const thumb400 = pb.files.getURL(photo, photo.image, { thumb: '400x0' });
+      const thumb800 = pb.files.getURL(photo, photo.image, { thumb: '0x800' });
+      const aspectRatio = (photo.width || 1) / (photo.height || 1);
 
-    return {
-      src: thumb800,
-      srcSet: [
-        { src: thumb200, width: 200, height: Math.round(200 * aspectRatio) },
-        { src: thumb400, width: 400, height: Math.round(400 * aspectRatio) },
-        { src: thumb800, width: Math.round(800 / aspectRatio), height: 800 }
-      ],
-      width: photo.width || 1,
-      height: photo.height || 1,
-      originalData: photo,
-    };
+      return {
+        src: thumb800,
+        srcSet: [
+          { src: thumb200, width: 200, height: Math.round(200 / aspectRatio) },
+          { src: thumb400, width: 400, height: Math.round(400 / aspectRatio) },
+          { src: thumb800, width: Math.round(800 * aspectRatio), height: 800 }
+        ],
+        width: photo.width || 1,
+        height: photo.height || 1,
+        originalData: photo,
+      };
+    });
+  }, [photos]);
+
+  const spacing = 4;
+  
+  // Safely calculate rows outside of the render return
+  const rows = useMemo(() => {
+    return calculateRows(formattedPhotos, containerWidth, 350, spacing);
+  }, [formattedPhotos, containerWidth]);
+
+  // Hook must be called at the top level!
+  const virtualizer = useWindowVirtualizer({
+    count: rows.length,
+    estimateSize: (index) => rows[index].exactHeight + spacing,
+    overscan: 4, // Keeps images slightly above/below view ready
+    scrollMargin: listOffset, // Essential so it knows about the header padding
   });
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 font-sans flex flex-col pt-24">
-      <header className={`fixed top-0 left-0 right-0 z-50 bg-background border-b border-border h-14 w-full flex justify-between items-center max-w-7xl mx-auto transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
+      <header className={`fixed top-0 left-0 right-0 z-50 bg-background border-b border-border h-14 w-full flex justify-between items-center px-4 md:px-8 transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Portfolio</h1>
           {isAdmin ? (
@@ -273,84 +340,108 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex-grow">
+      <div className="flex-grow w-full">
         {isLoading && photos.length === 0 ? (
           <div className="flex justify-center items-center h-64 text-muted">Loading gallery...</div>
         ) : (
-          <div className="max-w-7xl mx-auto mt-12">
-            <RowsPhotoAlbum
-              photos={formattedPhotos}
-              targetRowHeight={350}
-              spacing={4}
-              onClick={({ photo }) => {
-                if (isSelectMode) toggleSelection((photo.originalData as Photo).id);
-                else openLightbox(photo.originalData as Photo);
-              }}
-              render={{
-                image: (props, { photo }) => {
-                  const pbData = photo.originalData as Photo;
-                  const hasMetadata = pbData.camera || pbData.lens;
-                  const isSelected = selectedPhotos.includes(pbData.id);
-                  const { style, ...restImageProps } = props;
-
+          <div ref={galleryRef} className="w-full px-1 md:px-2 pb-24">
+            
+            {/* Virtualized Container */}
+            {containerWidth > 0 && rows.length > 0 && (
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index];
                   return (
-                    // Optimization 2: content-visibility added here
                     <div
+                      key={virtualRow.index}
                       style={{
-                        ...style,
-                        position: 'relative',
-                        contentVisibility: 'auto',
-                        containIntrinsicSize: `${style?.width}px ${style?.height}px`
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${row.exactHeight}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'flex',
+                        gap: `${spacing}px`,
+                        justifyContent: 'flex-start',
                       }}
-                      className={`group overflow-hidden rounded-sm cursor-zoom-in transition-all ${isSelectMode && isSelected ? 'ring-4 ring-primary ring-inset opacity-90' : 'shadow-sm hover:shadow-xl'}`}
                     >
-                      <img
-                        {...restImageProps}
-                        loading="lazy"
-                        decoding="async"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        className={`transition-transform duration-500 ${!isSelectMode && 'group-hover:scale-[1.02]'}`}
-                      />
+                      {row.items.map((item) => {
+                        const pbData = item.photo.originalData as Photo;
+                        const isSelected = selectedPhotos.includes(pbData.id);
+                        const hasMetadata = pbData.camera || pbData.lens;
+                        
+                        const width = row.exactHeight * item.aspect;
 
-                      {isSelectMode && (
-                        <div className="absolute top-3 left-3 z-20">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'bg-black/20 border-white/70 hover:bg-black/40'}`}>
-                            {isSelected && (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
+                        return (
+                          <div
+                            key={pbData.id}
+                            style={{ width: `${width}px`, height: '100%' }}
+                            className={`group relative overflow-hidden rounded-sm cursor-zoom-in transition-all ${isSelectMode && isSelected ? 'ring-4 ring-primary ring-inset opacity-90' : 'shadow-sm hover:shadow-xl'}`}
+                            onClick={() => {
+                              if (isSelectMode) toggleSelection(pbData.id);
+                              else openLightbox(pbData);
+                            }}
+                          >
+                            <img
+                              src={item.photo.src}
+                              srcSet={item.photo.srcSet.map((s: any) => `${s.src} ${s.width}w`).join(', ')}
+                              sizes={`(max-width: ${width}px) 100vw, ${width}px`}
+                              // REMOVED loading="lazy" - Virtualization handles this natively
+                              decoding="async"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              className={`transition-transform duration-500 ${!isSelectMode && 'group-hover:scale-[1.02]'}`}
+                            />
+
+                            {/* Selection UI */}
+                            {isSelectMode && (
+                              <div className="absolute top-3 left-3 z-20">
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'bg-black/20 border-white/70 hover:bg-black/40'}`}>
+                                  {isSelected && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Hover Metadata */}
+                            {!isSelectMode && (
+                              <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none">
+                                <div className="text-white text-xs font-medium">
+                                  {hasMetadata ? (
+                                    <>
+                                      {pbData.camera && <span>{pbData.camera}</span>}
+                                      {pbData.camera && pbData.lens && <span className="mx-1">•</span>}
+                                      {pbData.lens && <span>{pbData.lens}</span>}
+                                    </>
+                                  ) : (
+                                    <span className="text-white/80 italic">View Photo</span>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      )}
-
-                      {!isSelectMode && (
-                        <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4 pointer-events-none">
-                          <div className="text-white text-xs font-medium">
-                            {hasMetadata ? (
-                              <>
-                                {pbData.camera && <span>{pbData.camera}</span>}
-                                {pbData.camera && pbData.lens && <span className="mx-1">•</span>}
-                                {pbData.lens && <span>{pbData.lens}</span>}
-                              </>
-                            ) : (
-                              <span className="text-white/80 italic">View Photo</span>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   );
-                }
-              }}
-            />
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {!noMorePhotos && <div id="photo-sentinel" className="h-1"></div>}
+      {!noMorePhotos && <div id="photo-sentinel" className="h-10 w-full"></div>}
 
-      {/* Modals remain exactly the same as your original file */}
       {isUploadOpen && isAdmin && <UploadModal onClose={() => setIsUploadOpen(false)} onUploadSuccess={() => fetchPhotos(1)} />}
 
       {/* Delete Confirmation Modal */}
@@ -476,7 +567,6 @@ export default function App() {
               {lightboxPhoto.aperture && <span>ƒ/{lightboxPhoto.aperture}</span>}
               {lightboxPhoto.shutter_speed && <span>{lightboxPhoto.shutter_speed}s</span>}
               {lightboxPhoto.iso && <span>ISO {lightboxPhoto.iso}</span>}
-              {/* Show the capture date if available and valid */}
               {lightboxPhoto.date_taken && (
                 <span>
                   {(() => {

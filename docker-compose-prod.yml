@@ -22,7 +22,7 @@ services:
       - "3000:80"
     volumes:
       # NEW: Map a separate directory on the NAS for Nginx caching
-      - /mnt/nas/nginx_cache:/var/cache/nginx/pb_thumbnails
+      - ./nginx_cache:/var/cache/nginx/pb_thumbnails
     environment:
       - VITE_POCKETBASE_URL=/
     networks:
@@ -32,6 +32,7 @@ services:
 
 volumes:
   pb_data:
+  nginx_cache:
 
 networks:
   app-network:

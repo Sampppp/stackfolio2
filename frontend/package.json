@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.23",
     "browser-image-compression": "^2.0.2",
     "exifreader": "^4.37.0",
     "pocketbase": "^0.22.0",

@@ -90,16 +90,25 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
         useWebWorker: true,
       });
 
-        const data = {
-          image: compressedFile,
-          width: dimensions.width,
-          height: dimensions.height,
-          ...metadata,
-        };
+      const data = {
+        image: compressedFile,
+        width: dimensions.width,
+        height: dimensions.height,
+        ...metadata,
+      };
 
       try {
-        await pb.collection('photos').create(data);
+        const record = await pb.collection('photos').create(data);
         setUploadProgress({ current: i + 1, total: files.length });
+
+        // WARM THE CACHE: Silently request the thumbnails immediately
+        const thumb200 = pb.files.getURL(record, record.image, { thumb: '200x0' });
+        const thumb400 = pb.files.getURL(record, record.image, { thumb: '400x0' });
+
+        // Fire and forget - don't await these so the upload loop stays fast
+        fetch(thumb200, { mode: 'no-cors' }).catch(() => { });
+        fetch(thumb400, { mode: 'no-cors' }).catch(() => { });
+
       } catch (err) {
         console.error(`Failed to upload ${file.name}:`, err);
         // Continue to the next file even if one fails
