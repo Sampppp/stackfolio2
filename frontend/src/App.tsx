@@ -126,11 +126,16 @@ export default function App() {
     setIsLoading(true);
     try {
       const result = await pb.collection('photos').getList<Photo>(pageToLoad, perPage, {
-        sort: 'created',
+        // Request records; we will apply our own deterministic ordering client‑side.
+        sort: '-created',
       });
-      // PocketBase returns { items: Photo[], totalItems: number }
       const records = result.items;
-      setPhotos(prev => pageToLoad === 1 ? records : [...prev, ...records]);
+      // Merge with existing photos and sort by filename (numeric part) descending.
+      // Merge with existing photos and sort by creation timestamp (newest first).
+      setPhotos(prev => {
+        const combined = pageToLoad === 1 ? records : [...prev, ...records];
+        return combined.slice().sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+      });
       // If fewer records than perPage, we've reached the end
       if (records.length < perPage) {
         setNoMorePhotos(true);
@@ -532,6 +537,9 @@ export default function App() {
               {lightboxPhoto.aperture && <span>ƒ/{lightboxPhoto.aperture}</span>}
               {lightboxPhoto.shutter_speed && <span>{lightboxPhoto.shutter_speed}s</span>}
               {lightboxPhoto.iso && <span>ISO {lightboxPhoto.iso}</span>}
+              {lightboxPhoto.created && (
+                <span>{new Date(lightboxPhoto.created).toLocaleDateString()}</span>
+              )}
             </div>
           </>
         )}
