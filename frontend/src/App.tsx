@@ -36,6 +36,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [noMorePhotos, setNoMorePhotos] = useState(false);
   const perPage = 30; // number of photos per page
 
   // --- Selection State ---
@@ -115,6 +116,10 @@ export default function App() {
   const fetchingRef = React.useRef(false);
 
   const fetchPhotos = useCallback(async (pageToLoad: number) => {
+    // Reset end‑of‑list flag when loading the first page
+    if (pageToLoad === 1) {
+      setNoMorePhotos(false);
+    }
     // Debounce overlapping calls
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -126,6 +131,10 @@ export default function App() {
       // PocketBase returns { items: Photo[], totalItems: number }
       const records = result.items;
       setPhotos(prev => pageToLoad === 1 ? records : [...prev, ...records]);
+      // If fewer records than perPage, we've reached the end
+      if (records.length < perPage) {
+        setNoMorePhotos(true);
+      }
     } catch (error) {
       console.error("Failed to fetch photos:", error);
     } finally {
@@ -147,7 +156,7 @@ export default function App() {
     let debounceTimer: NodeJS.Timeout | null = null;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting && !isLoading) {
+        if (entry.isIntersecting && !isLoading && !noMorePhotos) {
           if (debounceTimer) clearTimeout(debounceTimer);
           debounceTimer = setTimeout(() => {
             const next = page + 1;
@@ -388,8 +397,8 @@ export default function App() {
           </div>
         )}
       </div>
-      {/* Sentinel for infinite scroll */}
-      <div id="photo-sentinel" className="h-1"></div>
+      {/* Sentinel for infinite scroll – hidden when no more photos */}
+      {!noMorePhotos && <div id="photo-sentinel" className="h-1"></div>}
 
       {/* Modals */}
       {isUploadOpen && isAdmin && (
