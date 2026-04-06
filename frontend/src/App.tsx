@@ -19,7 +19,7 @@ interface Photo {
   iso?: string | number;
   aperture?: string;
   shutter_speed?: string;
-  created: string;
+  date_taken: string;
 }
 
 export default function App() {
@@ -126,15 +126,19 @@ export default function App() {
     setIsLoading(true);
     try {
       const result = await pb.collection('photos').getList<Photo>(pageToLoad, perPage, {
-        // Request records; we will apply our own deterministic ordering client‑side.
-        sort: '-created',
+        // Request records sorted by the guaranteed `date_taken` field.
+        sort: '-date_taken',
       });
       const records = result.items;
       // Merge with existing photos and sort by filename (numeric part) descending.
-      // Merge with existing photos and sort by creation timestamp (newest first).
+      // Sort photos by the guaranteed `date_taken` field (most recent first).
+      // Since `date_taken` is always populated on upload, we no longer need any fallback to `created`.
       setPhotos(prev => {
         const combined = pageToLoad === 1 ? records : [...prev, ...records];
-        return combined.slice().sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+        return combined.slice().sort((a, b) => {
+          // Both `a.date_taken` and `b.date_taken` are guaranteed to be ISO strings.
+          return new Date(b.date_taken!).getTime() - new Date(a.date_taken!).getTime();
+        });
       });
       // If fewer records than perPage, we've reached the end
       if (records.length < perPage) {
@@ -537,8 +541,14 @@ export default function App() {
               {lightboxPhoto.aperture && <span>ƒ/{lightboxPhoto.aperture}</span>}
               {lightboxPhoto.shutter_speed && <span>{lightboxPhoto.shutter_speed}s</span>}
               {lightboxPhoto.iso && <span>ISO {lightboxPhoto.iso}</span>}
-              {lightboxPhoto.created && (
-                <span>{new Date(lightboxPhoto.created).toLocaleDateString()}</span>
+              {/* Show the capture date if available and valid */}
+              {lightboxPhoto.date_taken && (
+                <span>
+                  {(() => {
+                    const d = new Date(lightboxPhoto.date_taken);
+                    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+                  })()}
+                </span>
               )}
             </div>
           </>

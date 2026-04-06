@@ -29,14 +29,7 @@ migrate((app) => {
             { name: "iso", type: "text" }, // Changed to text to safely handle weird EXIF strings
             { name: "width", type: "number" },
             { name: "height", type: "number" },
-            
-            // CRITICAL V0.23 FIX: We must explicitly define autodate fields so our UI can sort by them
-            {
-                name: "created",
-                type: "autodate",
-                onCreate: true,
-                onUpdate: false
-            },
+            { name: "date_taken", type: "text" },
             {
                 name: "updated",
                 type: "autodate",

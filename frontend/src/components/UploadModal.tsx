@@ -37,7 +37,8 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
     // Loop through each file sequentially
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      let metadata = { camera: '', lens: '', aperture: '', shutter_speed: '', iso: '' };
+      // Include date_taken metadata extracted from EXIF (DateTimeOriginal)
+      let metadata = { camera: '', lens: '', aperture: '', shutter_speed: '', iso: '', date_taken: '' };
 
       const getDimensions = (): Promise<{ width: number; height: number }> => {
         return new Promise((resolve) => {
@@ -55,12 +56,27 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
       try {
         // Extract EXIF for this specific file
         const tags = await ExifReader.load(file);
+        // Extract and normalize EXIF metadata, converting the original capture date
+        // to an ISO‑8601 string that can be parsed by JavaScript's Date constructor.
+        const rawDate = tags['DateTimeOriginal']?.description ?? tags['DateTimeOriginal']?.value ?? '';
+        let isoDate = '';
+        if (typeof rawDate === 'string' && rawDate.length >= 19) {
+          // EXIF format is usually "YYYY:MM:DD HH:MM:SS"
+          // Convert to "YYYY-MM-DDTHH:MM:SS" (ISO) – assume local time.
+          isoDate = rawDate
+            .replace(/^([0-9]{4}):([0-9]{2}):([0-9]{2})/, '$1-$2-$3')
+            .replace(' ', 'T');
+        }
+        // If EXIF date is missing, fall back to the current upload timestamp.
+        const finalDateTaken = isoDate || new Date().toISOString();
         metadata = {
           camera: tags['Model']?.description || '',
           lens: tags['LensModel']?.description || '',
           aperture: tags['FNumber']?.description || '',
           shutter_speed: tags['ExposureTime']?.description || '',
           iso: tags['ISOSpeedRatings']?.description || '',
+          // Ensure date_taken is always populated.
+          date_taken: finalDateTaken,
         };
       } catch (error) {
         console.warn(`Could not read EXIF for ${file.name}:`, error);
@@ -74,12 +90,12 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
         useWebWorker: true,
       });
 
-      const data = {
-        image: compressedFile,
-        width: dimensions.width,
-        height: dimensions.height,
-        ...metadata,
-      };
+        const data = {
+          image: compressedFile,
+          width: dimensions.width,
+          height: dimensions.height,
+          ...metadata,
+        };
 
       try {
         await pb.collection('photos').create(data);
