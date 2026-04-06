@@ -42,12 +42,41 @@ export default function App() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // --- Header visibility on scroll ---
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollY = React.useRef(0);
+  const ticking = React.useRef(false);
 
   // Listen for auth state changes globally
   useEffect(() => {
     return pb.authStore.onChange(() => {
       setIsAdmin(pb.authStore.isValid && pb.authStore.isSuperuser);
     });
+  }, []);
+
+  // Listen to scroll events to hide/show header based on scroll direction
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      if (!ticking.current) {
+        window.requestAnimationFrame(() => {
+          // Hide header when scrolling down past a small offset
+          if (currentY > lastScrollY.current && currentY > 100) {
+            setShowHeader(false);
+          } else {
+            // Show header when scrolling up
+            setShowHeader(true);
+          }
+          lastScrollY.current = currentY;
+          ticking.current = false;
+        });
+        ticking.current = true;
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -146,9 +175,8 @@ export default function App() {
     setSelectedPhotos([]);
   };
 
-  const handleDeleteSelected = async () => {
-    if (!window.confirm(`Are you sure you want to delete ${selectedPhotos.length} photo(s)?`)) return;
-
+  // Perform actual deletion after user confirms via modal
+  const performDeleteSelected = async () => {
     setIsProcessing(true);
     try {
       for (const id of selectedPhotos) {
@@ -162,7 +190,14 @@ export default function App() {
       alert("Error deleting photos. Make sure you are logged in as Admin.");
     } finally {
       setIsProcessing(false);
+      setIsDeleteConfirmOpen(false);
     }
+  };
+
+  // Open confirmation modal instead of native confirm
+  const handleDeleteSelected = () => {
+    if (selectedPhotos.length === 0) return;
+    setIsDeleteConfirmOpen(true);
   };
 
   const handleDownloadSelected = async () => {
@@ -202,10 +237,10 @@ export default function App() {
   }));
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 font-sans transition-colors duration-300 flex flex-col">
+    <div className="min-h-screen bg-background p-4 md:p-8 font-sans transition-colors duration-300 flex flex-col pt-24">
 
       {/* Header Context Bar */}
-      <header className="mb-8 flex justify-between items-center max-w-7xl mx-auto border-b border-border pb-4 h-14 w-full">
+      <header className={`fixed top-0 left-0 right-0 z-50 bg-background border-b border-border h-14 w-full flex justify-between items-center max-w-7xl mx-auto transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Portfolio</h1>
 
@@ -285,7 +320,7 @@ export default function App() {
             Loading gallery...
           </div>
         ) : (
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto mt-12">
             <RowsPhotoAlbum
               photos={formattedPhotos}
               targetRowHeight={350}
@@ -363,6 +398,34 @@ export default function App() {
           // After uploading, reload the first page to include new photos
           onUploadSuccess={() => fetchPhotos(1)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="bg-gray-900 w-full max-w-sm rounded-2xl p-6 border border-gray-800 shadow-2xl">
+            <h2 className="text-xl font-bold mb-4 text-white">Confirm Deletion</h2>
+            <p className="text-gray-300 mb-6">Are you sure you want to delete {selectedPhotos.length} photo{selectedPhotos.length !== 1 ? 's' : ''}?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isProcessing}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={performDeleteSelected}
+                disabled={isProcessing}
+                className="bg-red-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {isProcessing ? 'Processing...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Admin Login Modal */}
