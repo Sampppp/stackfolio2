@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "browser-image-compression": "^2.0.2",
     "exifreader": "^4.37.0",
     "pocketbase": "^0.22.0",
     "react": "^18.3.1",

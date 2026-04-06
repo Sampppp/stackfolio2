@@ -35,6 +35,8 @@ export default function App() {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const perPage = 30; // number of photos per page
 
   // --- Selection State ---
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -80,24 +82,58 @@ export default function App() {
     setTimeout(() => setLightboxPhoto(null), 300);
   };
 
-  const fetchPhotos = useCallback(async () => {
+  // Ref to prevent overlapping fetches (auto‑cancellation)
+  const fetchingRef = React.useRef(false);
+
+  const fetchPhotos = useCallback(async (pageToLoad: number) => {
+    // Debounce overlapping calls
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setIsLoading(true);
     try {
-      const records = await pb.collection('photos').getFullList<Photo>({
-        // Sort photos by creation date in ascending order (oldest first)
+      const result = await pb.collection('photos').getList<Photo>(pageToLoad, perPage, {
         sort: 'created',
       });
-      setPhotos(records);
+      // PocketBase returns { items: Photo[], totalItems: number }
+      const records = result.items;
+      setPhotos(prev => pageToLoad === 1 ? records : [...prev, ...records]);
     } catch (error) {
       console.error("Failed to fetch photos:", error);
     } finally {
       setIsLoading(false);
+      fetchingRef.current = false;
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    fetchPhotos();
+    fetchPhotos(1);
+    setPage(1);
   }, [fetchPhotos]);
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const sentinel = document.getElementById('photo-sentinel');
+    if (!sentinel) return;
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoading) {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const next = page + 1;
+            fetchPhotos(next);
+            setPage(next);
+          }, 200); // 200ms debounce to avoid rapid calls
+        }
+      });
+    }, { rootMargin: '200px' });
+    observer.observe(sentinel);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      observer.disconnect();
+    };
+  }, [page, isLoading, fetchPhotos]);
 
   const toggleSelection = (id: string) => {
     setSelectedPhotos(prev =>
@@ -119,7 +155,8 @@ export default function App() {
         await pb.collection('photos').delete(id);
       }
       cancelSelection();
-      await fetchPhotos();
+      // Reload the first page after deletion to keep pagination consistent
+      await fetchPhotos(1);
     } catch (error) {
       console.error("Failed to delete photos:", error);
       alert("Error deleting photos. Make sure you are logged in as Admin.");
@@ -157,7 +194,8 @@ export default function App() {
   };
 
   const formattedPhotos = photos.map((photo) => ({
-    src: pb.files.getURL(photo, photo.image, { thumb: '0x800' }),
+    // Use tiny thumbnail for grid rendering
+    src: pb.files.getURL(photo, photo.image, { thumb: '200x0' }),
     width: photo.width || 1,
     height: photo.height || 1,
     originalData: photo,
@@ -274,6 +312,7 @@ export default function App() {
                     >
                       <img
                         {...restImageProps}
+                        loading="lazy"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         className={`transition-transform duration-500 ${!isSelectMode && 'group-hover:scale-[1.02]'}`}
                       />
@@ -314,12 +353,15 @@ export default function App() {
           </div>
         )}
       </div>
+      {/* Sentinel for infinite scroll */}
+      <div id="photo-sentinel" className="h-1"></div>
 
       {/* Modals */}
       {isUploadOpen && isAdmin && (
         <UploadModal
           onClose={() => setIsUploadOpen(false)}
-          onUploadSuccess={fetchPhotos}
+          // After uploading, reload the first page to include new photos
+          onUploadSuccess={() => fetchPhotos(1)}
         />
       )}
 

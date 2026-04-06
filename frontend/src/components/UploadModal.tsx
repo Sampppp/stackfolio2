@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import PocketBase from 'pocketbase';
 import ExifReader from 'exifreader';
+import imageCompression from 'browser-image-compression';
 
 const pb = new PocketBase(import.meta.env.VITE_POCKETBASE_URL);
 
@@ -66,8 +67,15 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
       }
 
       // Construct payload for this specific file
+      // Compress image before upload to reduce size (max 5MB, max width/height 2000px)
+      const compressedFile = await imageCompression(file, {
+        maxSizeMB: 5,
+        maxWidthOrHeight: 2000,
+        useWebWorker: true,
+      });
+
       const data = {
-        image: file,
+        image: compressedFile,
         width: dimensions.width,
         height: dimensions.height,
         ...metadata,

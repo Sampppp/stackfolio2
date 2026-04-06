@@ -18,7 +18,8 @@ migrate((app) => {
                     maxSelect: 1,
                     maxSize: 52428800, 
                     mimeTypes: ["image/jpeg", "image/jpg"],
-                    thumbs: ["400x0", "0x800"] 
+                // Added a tiny thumbnail for gallery grid (200px width) and kept existing sizes
+                thumbs: ["200x0", "400x0", "0x800"] 
                 }
             },
             { name: "camera", type: "text" },
