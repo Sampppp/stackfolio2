@@ -82,7 +82,18 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
         console.warn(`Could not read EXIF for ${file.name}:`, error);
       }
 
-      // Construct payload for this specific file
+      // ------------------------------------------------------------
+      // 1️⃣ Compute a SHA‑256 hash of the **compressed** file data.
+      //    The migration script hashes the stored (compressed) file, so we
+      //    must hash the same data here to get matching values.
+      // ------------------------------------------------------------
+      const computeHash = async (blob: Blob): Promise<string> => {
+        const buffer = await blob.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      };
+
       // Compress image before upload to reduce size (max 5MB, max width/height 2000px)
       const compressedFile = await imageCompression(file, {
         maxSizeMB: 5,
@@ -90,27 +101,57 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
         useWebWorker: true,
       });
 
+      // Compute the hash of the compressed file (now that we have the Blob)
+      const fileHash = await computeHash(compressedFile);
+
       const data = {
         image: compressedFile,
         width: dimensions.width,
         height: dimensions.height,
+        hash: fileHash, // <-- unique identifier for deduplication
         ...metadata,
       };
 
       try {
+      // Check for existing record with the same hash to avoid duplicate uploads
+      let duplicate = false;
+      try {
+        const existing = await pb.collection('photos').getFirstListItem(`hash = "${fileHash}"`);
+        if (existing) {
+          duplicate = true;
+          console.warn(`Duplicate image detected (hash match) for ${file.name}. Skipping upload.`);
+        }
+      } catch (e) {
+        // If no record is found, PocketBase throws a 404 which we can ignore
+        const err = e as any;
+        if (err?.response?.status !== 404) {
+          console.error('Error checking for duplicate hash:', err);
+        }
+      }
+
+      if (!duplicate) {
         const record = await pb.collection('photos').create(data);
         setUploadProgress({ current: i + 1, total: files.length });
 
         // WARM THE CACHE: Silently request the thumbnails immediately
         const thumb200 = pb.files.getURL(record, record.image, { thumb: '200x0' });
         const thumb400 = pb.files.getURL(record, record.image, { thumb: '400x0' });
-
         // Fire and forget - don't await these so the upload loop stays fast
-        fetch(thumb200, { mode: 'no-cors' }).catch(() => { });
-        fetch(thumb400, { mode: 'no-cors' }).catch(() => { });
+        fetch(thumb200, { mode: 'no-cors' }).catch(() => {});
+        fetch(thumb400, { mode: 'no-cors' }).catch(() => {});
+      } else {
+        // Still count this file as processed for progress purposes
+        setUploadProgress({ current: i + 1, total: files.length });
+      }
 
       } catch (err) {
-        console.error(`Failed to upload ${file.name}:`, err);
+        const error = err as any;
+        // PocketBase returns a 400 with code "validation_invalid_unique" when the unique index fails.
+        if (error?.response?.status === 400 && error?.response?.data?.code === 'validation_invalid_unique') {
+          console.warn(`Duplicate image detected (hash collision) for ${file.name}. Skipping upload.`);
+        } else {
+          console.error(`Failed to upload ${file.name}:`, error);
+        }
         // Continue to the next file even if one fails
       }
     }
