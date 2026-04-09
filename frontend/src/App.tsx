@@ -290,7 +290,7 @@ export default function App() {
   }, [photos]);
 
   const spacing = 4;
-  
+
   // Safely calculate rows outside of the render return
   const rows = useMemo(() => {
     return calculateRows(formattedPhotos, containerWidth, 350, spacing);
@@ -345,7 +345,7 @@ export default function App() {
           <div className="flex justify-center items-center h-64 text-muted">Loading gallery...</div>
         ) : (
           <div ref={galleryRef} className="w-full px-1 md:px-2 pb-24">
-            
+
             {/* Virtualized Container */}
             {containerWidth > 0 && rows.length > 0 && (
               <div
@@ -376,7 +376,7 @@ export default function App() {
                         const pbData = item.photo.originalData as Photo;
                         const isSelected = selectedPhotos.includes(pbData.id);
                         const hasMetadata = pbData.camera || pbData.lens;
-                        
+
                         const width = row.exactHeight * item.aspect;
 
                         return (
@@ -418,9 +418,11 @@ export default function App() {
                                 <div className="text-white text-xs font-medium">
                                   {hasMetadata ? (
                                     <>
-                                      {pbData.camera && <span>{pbData.camera}</span>}
-                                      {pbData.camera && pbData.lens && <span className="mx-1">•</span>}
-                                      {pbData.lens && <span>{pbData.lens}</span>}
+                                      {pbData.aperture && <span>{pbData.aperture}</span>}
+                                      {<span className="mx-1">•</span>}
+                                      {pbData.shutter_speed && <span>{pbData.shutter_speed}</span>}
+                                      {<span className="mx-1">•</span>}
+                                      {pbData.iso && <span>ISO {pbData.iso}</span>}
                                     </>
                                   ) : (
                                     <span className="text-white/80 italic">View Photo</span>
@@ -549,10 +551,8 @@ export default function App() {
                 }`}
               onClick={(e) => e.stopPropagation()}
             />
-
             <div
-              className={`absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-wrap justify-center gap-3 md:gap-6 text-xs md:text-sm text-gray-200 bg-black/60 px-6 py-3 rounded-full backdrop-blur-lg border border-white/10 transition-all duration-300 delay-75 ${isLightboxOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-                }`}
+              className={`absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-nowrap items-center justify-center gap-2 text-xs md:text-sm text-gray-200 bg-black/30 px-3 py-1 rounded-full border border-white/10 max-w-[95%] mx-auto whitespace-nowrap overflow-hidden truncate transition-all duration-300 delay-75 ${isLightboxOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
               onClick={(e) => e.stopPropagation()}
             >
               {lightboxPhoto.camera && (
@@ -564,7 +564,7 @@ export default function App() {
                 </span>
               )}
               {lightboxPhoto.lens && <span>{lightboxPhoto.lens}</span>}
-              {lightboxPhoto.aperture && <span>ƒ/{lightboxPhoto.aperture}</span>}
+              {lightboxPhoto.aperture && <span>{lightboxPhoto.aperture}</span>}
               {lightboxPhoto.shutter_speed && <span>{lightboxPhoto.shutter_speed}s</span>}
               {lightboxPhoto.iso && <span>ISO {lightboxPhoto.iso}</span>}
               {lightboxPhoto.date_taken && (
