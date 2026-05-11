@@ -14,13 +14,38 @@ interface UploadModalProps {
 export default function UploadModal({ onClose, onUploadSuccess }: UploadModalProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
+  const processFiles = (incomingFiles: FileList | null) => {
+    if (!incomingFiles) return;
+    const newFiles = Array.from(incomingFiles).filter(file => 
+      file.type === 'image/jpeg' || file.type === 'image/jpg'
+    );
+    setFiles(prev => [...prev, ...newFiles]);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      // Convert FileList to an Array
-      setFiles(Array.from(e.target.files));
-    }
+    processFiles(e.target.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    processFiles(e.dataTransfer.files);
   };
 
   const removeFile = (indexToRemove: number) => {
@@ -168,7 +193,16 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
 
         <form onSubmit={handleUpload} className="space-y-4">
           {/* File Input Area - Now accepts multiple files */}
-          <div className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-950 relative">
+          <div 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 bg-gray-950 relative ${
+              isDragging 
+                ? 'border-blue-500 bg-blue-500/10 scale-[1.02]' 
+                : 'border-gray-700 hover:border-blue-500'
+            }`}
+          >
             <input
               type="file"
               accept="image/jpeg, image/jpg"
@@ -179,8 +213,8 @@ export default function UploadModal({ onClose, onUploadSuccess }: UploadModalPro
               disabled={isUploading}
             />
             <div className="pointer-events-none">
-              <span className="text-gray-300 block mb-2 font-medium">
-                Drag & Drop or Click to Select
+              <span className={`block mb-2 font-medium transition-colors ${isDragging ? 'text-blue-300' : 'text-gray-300'}`}>
+                {isDragging ? 'Drop photos to upload' : 'Drag & Drop or Click to Select'}
               </span>
               <span className="text-blue-400 text-sm">Select multiple .jpg files</span>
             </div>
